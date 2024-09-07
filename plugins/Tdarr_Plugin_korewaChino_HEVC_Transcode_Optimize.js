@@ -208,7 +208,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratemax = 5000;
         }
 
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:V 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 4K
