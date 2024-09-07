@@ -178,7 +178,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 1000;
             bitratemax = 1500;
         }
-        response.preset += `,${map} -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 20 -b:v ${bitratetarget}k -maxrate:v 1500k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v 1500k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
         transcode = 1;
     }
 
@@ -193,7 +193,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 2000;
             bitratemax = 4000;
         }
-        response.preset += `,${map} -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 20 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 1080p
@@ -202,13 +202,13 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
         bitratecheck = 3200000;
         if (bitrateprobe != null && bitrateprobe < bitratecheck) {
             bitratetarget = parseInt((bitrateprobe * 0.8) / 1000); // Lower Bitrate to 60% of original and convert to KB
-            bitratemax = bitratetarget + 3500; // Set max bitrate to 6MB Higher
+            bitratemax = bitratetarget + 3200; // Set max bitrate to 6MB Higher
         } else {
             bitratetarget = 3200;
-            bitratemax = 6000;
+            bitratemax = 5000;
         }
 
-        response.preset += `,${map} -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:V 25 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:V 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 4K
@@ -222,7 +222,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 14000;
             bitratemax = 20000;
         }
-        response.preset += `,${map} -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //check if the file is eligible for transcoding
