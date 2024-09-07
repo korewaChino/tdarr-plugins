@@ -199,12 +199,12 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     //file will be encoded if the resolution is 1080p
     //codec will be checked so it can be transcoded correctly
     if (file.video_resolution === "1080p") {
-        bitratecheck = 3200000;
+        bitratecheck = 3500000;
         if (bitrateprobe != null && bitrateprobe < bitratecheck) {
             bitratetarget = parseInt((bitrateprobe * 0.8) / 1000); // Lower Bitrate to 60% of original and convert to KB
-            bitratemax = bitratetarget + 3200; // Set max bitrate to 6MB Higher
+            bitratemax = bitratetarget + 3500; // Set max bitrate to 6MB Higher
         } else {
-            bitratetarget = 3200;
+            bitratetarget = 3500;
             bitratemax = 5000;
         }
 
