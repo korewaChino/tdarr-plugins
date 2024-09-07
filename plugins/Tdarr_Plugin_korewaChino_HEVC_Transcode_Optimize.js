@@ -2,12 +2,34 @@
 
 const details = () => ({
     id: "Tdarr_Plugin_korewaChino_HEVC_Transcode_Optimize",
-    Name: "Cappy's Transcode Plugin, Transcode to HEVC or optimize existing HEVC files - Tiered based on resolution and bitrate",
+    Name: "Transcode to HEVC or optimize existing HEVC files - Tiered based on resolution and bitrate",
     Type: "Video",
     Operation: "Transcode",
     Description: "Transcode to HEVC using NVENC, based on resolution and bitrate and also keeps everything except video. Attempts to also optimize existing HEVC files to target bitrate if possible.",
     Version: "0.1.0",
-    Link: "https://github.com/korewaChino/tdarr-plugins"
+    Link: "https://github.com/korewaChino/tdarr-plugins",
+    Inputs: [
+        {
+            name: "transcode_preset",
+            type: "string",
+            defaultValue: "slow",
+            inputUI: {
+                type: "dropdown",
+                options: [
+                    "veryslow",
+                    "slower",
+                    "slow",
+                    "medium",
+                    "fast",
+                    "faster",
+                    "veryfast",
+                    "superfast",
+                    "ultrafast"
+                ]
+            },
+            tooltip: "Choose the desired transcode preset"
+        }
+    ]
 });
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -23,6 +45,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     var subcli = `-c:s copy -c:t copy -c:d copy`;
     var maxmux = "";
     var map = "-map 0 -map 0:t? -map 0:d?";
+    var transcode_preset = inputs.transcode_preset;
     //default values that will be returned
     var response = {
         processFile: false,
@@ -155,7 +178,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 1000;
             bitratemax = 1500;
         }
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 29 -b:v ${bitratetarget}k -maxrate:v 1500k -preset slow -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 29 -b:v ${bitratetarget}k -maxrate:v 1500k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
         transcode = 1;
     }
 
@@ -170,7 +193,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 2000;
             bitratemax = 4000;
         }
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 30 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset slow -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 30 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 1080p
@@ -185,7 +208,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratemax = 5000;
         }
 
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:V 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset slow -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:V 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 4K
@@ -199,7 +222,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 14000;
             bitratemax = 20000;
         }
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset slow -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
         transcode = 1;
     }
     //check if the file is eligible for transcoding
