@@ -205,7 +205,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratemax = bitratetarget + 3500; // Set max bitrate to 6MB Higher
         } else {
             bitratetarget = 3500;
-            bitratemax = 5000;
+            bitratemax = 6000;
         }
 
         response.preset += `,${map} -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:V 30 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
