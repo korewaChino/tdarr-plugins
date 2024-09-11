@@ -106,10 +106,6 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     } else if (file.video_codec_name == "mpeg2") {
         response.preset = `-c:v mpeg2_cuvid`;
     }
-    // skipping this one because it's empty
-    //  else if (file.video_codec_name == 'mpeg4') {
-    //    response.preset = ``
-    //  }
     else if (file.video_codec_name == "vc1") {
         response.preset = `-c:v vc1_cuvid`;
     } else if (file.video_codec_name == "vp8") {
@@ -118,6 +114,10 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
         // response.preset = `-c:v vp9_cuvid`;
         response.processFile = false;
         response.infoLog += "☑File is already in vp9! \n";
+    } else {
+        // use CPU for other codecs
+        response.infoLog += "☑File is not in a supported codec, decoding with CPU! \n";
+        response.preset = ``
     }
 
     //Set Subtitle Var before adding encode cli
