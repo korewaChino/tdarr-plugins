@@ -28,7 +28,7 @@ into the specified codec. Bitrate and channel count are kept the same.
           'mp2',
           'libmp3lame',
           'truehd',
-          'libopus',
+          'opus',
         ],
       },
       tooltip:
