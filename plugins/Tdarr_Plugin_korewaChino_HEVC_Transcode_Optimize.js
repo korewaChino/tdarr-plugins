@@ -198,10 +198,10 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     //file will be encoded if the resolution is 1080p
     //codec will be checked so it can be transcoded correctly
     if (file.video_resolution === "1080p") {
-        bitratecheck = 5000000;
+        bitratecheck = 3500000;
         if (bitrateprobe != null && bitrateprobe < bitratecheck) {
             bitratetarget = parseInt((bitrateprobe * 0.8) / 1000); // Lower Bitrate to 60% of original and convert to KB
-            bitratemax = bitratetarget + 5000; // Set max bitrate to 6MB Higher
+            bitratemax = bitratetarget + 3500; // Set max bitrate to 6MB Higher
         } else {
             bitratetarget = 5000;
             bitratemax = 10000;
@@ -213,7 +213,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     //file will be encoded if the resolution is 4K
     //codec will be checked so it can be transcoded correctly
     if (file.video_resolution === "4KUHD") {
-        bitratecheck = 20000000;
+        bitratecheck = 14000000;
         if (bitrateprobe != null && bitrateprobe < bitratecheck) {
             bitratetarget = parseInt((bitrateprobe * 0.7) / 1000); // Lower Bitrate to 60% of original and convert to KB
             bitratemax = bitratetarget + 12000; // Set max bitrate to 6MB Higher
