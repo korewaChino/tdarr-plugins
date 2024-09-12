@@ -59,6 +59,8 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
         // debug: ""
     };
     var target_codec = "hevc_nvenc";
+    var vaapi_filter = ` -vf 'hwupload,scale_vaapi=format=nv12'`
+    var vaapi_encode = `hevc_vaapi`
 
     //check if the file is a video, if not the function will be stopped immediately
     if (file.fileMedium !== "video") {
@@ -85,14 +87,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     }
 
     // If already HEVC then keep as is, but optimize anyways
-    if (file.ffProbeData.streams[0].codec_name == "hevc") {
-        response.processFile = false;
+    if (file.video_codec_name == "hevc") {
         response.infoLog += "☑File is already in hevc! \n";
         response.preset = `-c:v hevc_cuvid`;
     }
-
-    //codec will be checked so it can be transcoded correctly
-    if (file.video_codec_name == "h263") {
+    else if (file.video_codec_name == "h263") {
         response.preset = `-c:v h263_cuvid`;
     } else if (file.video_codec_name == "h264") {
         if (file.ffProbeData.streams[0].profile != "High 10") {
