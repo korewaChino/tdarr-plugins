@@ -79,7 +79,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
     var preset = transcodeStandardiseAudioCodecs.preset;
 
-    preset += " -map 0:t? -map 0:d? -c:s copy -c:t copy -c:d copy";
+    preset += " -map 0:t?";
 
     response.preset = preset;
     response.container = `.${file.container}`;

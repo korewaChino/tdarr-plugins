@@ -42,9 +42,9 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     var bitratetarget = 0;
     var bitratemax = 0;
     var bitratecheck = 0;
-    var subcli = `-c:s copy -c:t copy -c:d copy`;
+    var subcli = ``;
     var maxmux = "";
-    var map = "-map 0 -map 0:t? -map 0:d?";
+    var map = "-map 0:v:0 -map 0:a? -map 0:s? -map 0:t? -map 0:d?";
     var transcode_preset = inputs.transcode_preset;
     //default values that will be returned
     var response = {
@@ -82,7 +82,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
         // } else {
         //     bitrateprobe = stream.bit_rate;
         // }
-        
+
         response.infoLog += "☑File is a video! \n";
     }
 
@@ -150,22 +150,23 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
                 maxmux = ` -max_muxing_queue_size 9999`;
             }
         } catch (err) {}
-        //mitigate errors due to embeded pictures
-        try {
-            if (
-                (file.ffProbeData.streams[i].codec_name.toLowerCase() ==
-                    "png" ||
-                    file.ffProbeData.streams[i].codec_name.toLowerCase() ==
-                        "bmp" ||
-                    file.ffProbeData.streams[i].codec_name.toLowerCase() ==
-                        "mjpeg") &&
-                file.ffProbeData.streams[i].codec_type.toLowerCase() == "video"
-            ) {
-                map = `-map 0:v:0 -map 0:a -map 0:s? -map 0:t? -map 0:d?`;
-            }
-        } catch (err) {}
+        // We comment this out because we expect to keep all attachments
+        // mitigate errors due to embeded pictures
+        // try {
+        //     if (
+        //         (file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+        //             "png" ||
+        //             file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+        //                 "bmp" ||
+        //             file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+        //                 "mjpeg") &&
+        //         file.ffProbeData.streams[i].codec_type.toLowerCase() == "video"
+        //     ) {
+        //         // map = `-map 0:v:0 -map 0:a? -map 0:s? -map 0:t? -map 0:d?`;
+        //     }
+        // } catch (err) {}
     }
-        
+
     //file will be encoded if the resolution is 480p or 576p
     //codec will be checked so it can be transcoded correctly
     if (file.video_resolution === "480p" || file.video_resolution === "576p") {
@@ -177,7 +178,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 1000;
             bitratemax = 1500;
         }
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v 1500k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v 1500k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0  ${subcli}${maxmux}`;
         transcode = 1;
     }
 
@@ -192,7 +193,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 2000;
             bitratemax = 4000;
         }
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0  ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 1080p
@@ -207,7 +208,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratemax = 10000;
         }
 
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy -c:t copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0  ${subcli}${maxmux}`;
         transcode = 1;
     }
     //file will be encoded if the resolution is 4K
@@ -221,7 +222,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
             bitratetarget = 20000;
             bitratemax = 25000;
         }
-        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0 -c:a copy ${subcli}${maxmux}`;
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt p010le -qmin 0 -cq:v 31 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} -rc-lookahead 32 -spatial_aq:v 1 -aq-strength:v 8 -a53cc 0  ${subcli}${maxmux}`;
         transcode = 1;
     }
     //check if the file is eligible for transcoding
@@ -242,7 +243,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
                 response.infoLog += `☒File will not be transcoded!\n`;
                 return response;
             }
-            
+
         } else {
             response.infoLog += `File bitrate is HIGHER than the Default Target Bitrate!\n`;
         }
