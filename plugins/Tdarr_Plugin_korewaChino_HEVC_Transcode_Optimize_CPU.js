@@ -1,0 +1,246 @@
+/* eslint-disable */
+
+const details = () => ({
+    id: "Tdarr_Plugin_korewaChino_HEVC_Transcode_Optimize_CPU",
+    Name: "Transcode to HEVC or optimize existing HEVC files - Tiered based on resolution and bitrate",
+    Type: "Video",
+    Operation: "Transcode",
+    Description: "Transcode to HEVC using the CPU, based on resolution and bitrate and also keeps everything except video. Attempts to also optimize existing HEVC files to target bitrate if possible.",
+    Version: "0.1.0",
+    Link: "https://github.com/korewaChino/tdarr-plugins",
+    Inputs: [
+        {
+            name: "transcode_preset",
+            type: "string",
+            defaultValue: "slow",
+            inputUI: {
+                type: "dropdown",
+                options: [
+                    "veryslow",
+                    "slower",
+                    "slow",
+                    "medium",
+                    "fast",
+                    "faster",
+                    "veryfast",
+                    "superfast",
+                    "ultrafast"
+                ]
+            },
+            tooltip: "Choose the desired transcode preset"
+        }
+    ]
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const plugin = (file, librarySettings, inputs, otherArguments) => {
+    const lib = require("../methods/lib")();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars,no-param-reassign
+    inputs = lib.loadDefaultValues(inputs, details);
+    var transcode = 0; //if this var changes to 1 the file will be transcoded
+    var bitrateprobe = 0; //bitrate from ffprobe
+    var bitratetarget = 0;
+    var bitratemax = 0;
+    var bitratecheck = 0;
+    var subcli = `-c:a copy`; // This is so that audio tracks are not transcoded to vorbis
+    var maxmux = "";
+    var map = "-map 0";
+    var transcode_preset = inputs.transcode_preset;
+    //default values that will be returned
+    var response = {
+        processFile: false,
+        preset: "",
+        container: ".mkv",
+        handBrakeMode: false,
+        FFmpegMode: false,
+        reQueueAfter: true,
+        infoLog: "",
+        maxmux: false,
+        // debug: ""
+    };
+    var target_codec = "libx265";
+    var vaapi_filter = ` -vf 'hwupload,scale_vaapi=format=nv12'`
+    var vaapi_encode = `hevc_vaapi`
+
+    //check if the file is a video, if not the function will be stopped immediately
+    if (file.fileMedium !== "video") {
+        response.processFile = false;
+        response.infoLog += "☒File is not a video! \n";
+        return response;
+    } else {
+        bitrateprobe = file.bit_rate;
+
+        // response.infoLog += `bitrateprobe: ${bitrateprobe}\n`;
+        // if (file.ffProbeData.bit_rate === undefined) {
+        //     if (stream.tags) {
+        //         bitrateprobe = stream.tags.BPS;
+        //     }
+        // } else {
+        //     bitrateprobe = stream.bit_rate;
+        // }
+
+        response.infoLog += "☑File is a video! \n";
+    }
+    response.preset = ``;
+    // If already HEVC then keep as is, but optimize anyways
+    if (file.video_codec_name == "hevc") {
+        response.infoLog += "☑File is already in hevc! \n";
+    }
+    else if (file.video_codec_name == "h263") {
+    } else if (file.video_codec_name == "h264") {
+        if (file.ffProbeData.streams[0].profile != "High 10") {
+            //Remove HW Decoding for High 10 Profile
+        }
+    } else if (file.video_codec_name == "mjpeg") {
+    } else if (file.video_codec_name == "mpeg1") {
+    } else if (file.video_codec_name == "mpeg2") {
+    }
+    else if (file.video_codec_name == "vc1") {
+    } else if (file.video_codec_name == "vp8") {
+    } else if (file.video_codec_name == "vp9") {
+        response.processFile = false;
+        response.infoLog += "☑File is already in vp9! \n";
+    } else {
+        // use CPU for other codecs
+        response.infoLog += "☑File is not in a supported codec, decoding with CPU! \n";
+    }
+
+    //Set Subtitle Var before adding encode cli
+    for (var i = 0; i < file.ffProbeData.streams.length; i++) {
+        try {
+            if (
+                file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+                "mov_text" &&
+                file.ffProbeData.streams[i].codec_type.toLowerCase() ==
+                "subtitle" ||
+                file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+                "hdmv_pgs_subtitle"
+            ) {
+                response.infoLog += `☒File has Subtitles!\n`;
+                subcli = `-c:s copy -c:t copy -c:d copy`;
+            }
+        } catch (err) { }
+        //mitigate TrueHD audio causing Too many packets error
+        try {
+            if (
+                file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+                "truehd" ||
+                (file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+                    "dts" &&
+                    file.ffProbeData.streams[i].profile.toLowerCase() ==
+                    "dts-hd ma") ||
+                (file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+                    "aac" &&
+                    file.ffProbeData.streams[i].sample_rate.toLowerCase() ==
+                    "44100" &&
+                    file.ffProbeData.streams[i].codec_type.toLowerCase() ==
+                    "audio")
+            ) {
+                maxmux = ` -max_muxing_queue_size 9999`;
+            }
+        } catch (err) { }
+        // We comment this out because we expect to keep all attachments
+        // mitigate errors due to embeded pictures
+        // try {
+        //     if (
+        //         (file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+        //             "png" ||
+        //             file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+        //                 "bmp" ||
+        //             file.ffProbeData.streams[i].codec_name.toLowerCase() ==
+        //                 "mjpeg") &&
+        //         file.ffProbeData.streams[i].codec_type.toLowerCase() == "video"
+        //     ) {
+        //         // map = `-map 0:v:0 -map 0:a? -map 0:s? -map 0:t? -map 0:d?`;
+        //     }
+        // } catch (err) {}
+    }
+
+    //file will be encoded if the resolution is 480p or 576p
+    //codec will be checked so it can be transcoded correctly
+    if (file.video_resolution === "480p" || file.video_resolution === "576p") {
+        bitratecheck = 1000000;
+        if (bitrateprobe != null && bitrateprobe < bitratecheck) {
+            bitratetarget = parseInt((bitrateprobe * 0.8) / 1000); // Lower Bitrate to 60% of original and convert to KB
+            bitratemax = bitratetarget + 500; // Set max bitrate to 6MB Higher
+        } else {
+            bitratetarget = 1000;
+            bitratemax = 1500;
+        }
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt yuv420p10le -crf 28 -b:v ${bitratetarget}k -maxrate:v 1500k -preset ${transcode_preset} ${subcli}${maxmux}`;
+        transcode = 1;
+    }
+
+    //file will be encoded if the resolution is 720p
+    //codec will be checked so it can be transcoded correctly
+    if (file.video_resolution === "720p") {
+        bitratecheck = 2500000;
+        if (bitrateprobe != null && bitrateprobe < bitratecheck) {
+            bitratetarget = parseInt((bitrateprobe * 0.8) / 1000); // Lower Bitrate to 60% of original and convert to KB
+            bitratemax = bitratetarget + 2000; // Set max bitrate to 6MB Higher
+        } else {
+            bitratetarget = 2000;
+            bitratemax = 4000;
+        }
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt yuv420p10le -crf 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} ${subcli}${maxmux}`;
+        transcode = 1;
+    }
+    //file will be encoded if the resolution is 1080p
+    //codec will be checked so it can be transcoded correctly
+    if (file.video_resolution === "1080p") {
+        bitratecheck = 3500000;
+        if (bitrateprobe != null && bitrateprobe < bitratecheck) {
+            bitratetarget = parseInt((bitrateprobe * 0.8) / 1000); // Lower Bitrate to 60% of original and convert to KB
+            bitratemax = bitratetarget + 3500; // Set max bitrate to 6MB Higher
+        } else {
+            bitratetarget = 5000;
+            bitratemax = 10000;
+        }
+
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt yuv420p10le -crf 28 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} ${subcli}${maxmux}`;
+        transcode = 1;
+    }
+    //file will be encoded if the resolution is 4K
+    //codec will be checked so it can be transcoded correctly
+    if (file.video_resolution === "4KUHD") {
+        bitratecheck = 15000000;
+        if (bitrateprobe != null && bitrateprobe < bitratecheck) {
+            bitratetarget = parseInt((bitrateprobe * 0.7) / 1500); // Lower Bitrate to 60% of original and convert to KB
+            bitratemax = bitratetarget + 15000; // Set max bitrate to 6MB Higher
+        } else {
+            bitratetarget = 20000;
+            bitratemax = 25000;
+        }
+        response.preset += `,${map} -dn -c:v ${target_codec} -pix_fmt yuv420p10le -x265-params crf=28:qcomp=0.65:aq-mode=3:aq-strength=0.8:qg-size=32 -b:v ${bitratetarget}k -maxrate:v ${bitratemax}k -preset ${transcode_preset} ${subcli}${maxmux}`;
+        transcode = 1;
+    }
+    //check if the file is eligible for transcoding
+    //if true the neccessary response values will be changed
+    if (transcode == 1) {
+        response.processFile = true;
+        response.FFmpegMode = true;
+        response.reQueueAfter = true;
+        response.infoLog += `☒File is ${file.video_resolution}!\n`;
+        response.infoLog += `☒File bitrate is ${bitrateprobe / 1000}kbps\n`;
+        response.infoLog += `☒Target Bitrate set to ${bitratecheck / 1000}kbps!\n`;
+        if (bitrateprobe < bitratecheck) {
+            response.infoLog += `File bitrate is LOWER than the Default Target Bitrate!\n`;
+            // Check if HEVC already
+            if (file.ffProbeData.streams[0].codec_name == "hevc") {
+                response.infoLog += `File is already in HEVC format AND lower than the target bitrate!\n`;
+                response.processFile = false;
+                response.infoLog += `☒File will not be transcoded!\n`;
+                return response;
+            }
+
+        } else {
+            response.infoLog += `File bitrate is HIGHER than the Default Target Bitrate!\n`;
+        }
+        response.infoLog += `☒Target Bitrate set to ${bitratetarget}kbps!\n`;
+        response.infoLog += `File is being transcoded!\n`;
+    }
+
+    return response;
+};
+module.exports.details = details;
+module.exports.plugin = plugin;
