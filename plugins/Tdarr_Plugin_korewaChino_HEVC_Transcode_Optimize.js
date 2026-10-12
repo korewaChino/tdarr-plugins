@@ -7,7 +7,7 @@ const details = () => ({
   Operation: "Transcode",
   Description:
     "Transcode to HEVC (NVENC or CPU x265) based on resolution & bitrate; preserves non-video streams and can optimize existing HEVC.",
-  Version: "0.5.3",
+  Version: "0.5.4",
   Link: "https://github.com/korewaChino/tdarr-plugins",
   Inputs: [
     {
@@ -411,25 +411,74 @@ function processStreams(streams = [], options = {}) {
         const channels = streamMeta.channels || 0;
         const layout = streamMeta.channelLayout || "";
 
-        // Handle Opus channel layout compatibility
-        // libopus with default mapping_family (-1) only supports mono, stereo, and standard surround layouts
-        // 5.1(side), 6.1, 7.1(wide), etc. require mapping_family 1 (Vorbis channel mapping)
-        if (targetAudioCodec === "libopus") {
-          // Problematic layouts that need mapping_family 1:
-          // - 5.1(side) - side surround instead of rear
-          // - Any layout with more than 2 channels that isn't standard 5.1/7.1
-          // - Layouts with "side" designation
-          const needsMappingFamily1 =
-            layout.includes("side") ||
-            layout.includes("wide") ||
-            (channels > 2 &&
-              !["5.1", "7.1", "quad", "5.0", "4.0", "6.1", "7.0"].some(
-                (std) => layout.includes(std) && !layout.includes("side"),
-              ));
-          // For channels > 2, always use mapping_family 1 to be safe with various layouts
-          if (channels > 2 || needsMappingFamily1) {
+        // Opus channel-layout compatibility.
+        //
+        // libopus needs an explicit mapping family for anything past a standard
+        // surround layout, and choosing the wrong one fails the ENTIRE ffmpeg
+        // run with "Invalid channel layout" (ffmpeg exits 234, tdarr reports
+        // "Running tdarr-ffmpeg failed"). It is not a warning: the file is left
+        // untranscoded.
+        //
+        // libopus mapping families in ffmpeg:
+        //   0     mono/stereo only. ffmpeg's default when unset is -1 (auto).
+        //   1     the fixed Vorbis tables, which describe EXACTLY:
+        //           3ch  2.1      6ch  5.1
+        //           4ch  quad     6ch  5.1(side)   (same table entry)
+        //           5ch  5.0      8ch  7.1
+        //           7ch  6.1      8ch  7.1(wide)   (same table entry)
+        //         An 8ch stream can only be 7.1 rear surrounds -- there is NO
+        //         family 1 entry that carries height channels.
+        //   255   discrete: the channel layout travels with the stream, so any
+        //         channel count is accepted (1..255).
+        //
+        // The rule that used to live here was "channels > 2 -> mapping_family
+        // 1", which is wrong for height-based (Atmos/DTS:X) layouts. Measured
+        // on this cluster with ffmpeg 7.1.4 on a real file whose only audio
+        // track was E-AC3 8ch "FL+FR+FC+LFE+SL+SR+TFL+TFR" (7.1.4 Atmos):
+        //
+        //   layout        channels  family 1        family 255
+        //   7.1.4         8         FAIL (exit 234) OK, stays 7.1.4
+        //   7.1           8         OK              OK
+        //   7.1(wide)     8         OK -> "7.1"     OK
+        //   6.1           7         OK              OK
+        //   5.1           6         OK              OK
+        //   5.1(side)     6         OK -> "5.1"     OK
+        //   5.0 / quad    5 / 4     OK              OK
+        //   2.1           3         OK              OK
+        //
+        // So family 1 is used only where it is exactly right, and 255 everywhere
+        // else -- in particular for any height layout, which family 1 would
+        // otherwise reject outright. 255 accepts every layout tested, mono
+        // through hexadecagonal, and preserves the channel count and layout.
+        //
+        // The comparison must be EXACT, not substring: "7.1(wide)" contains
+        // "7.1", and the 7.1.4 file's layout string is the long descriptive form
+        // ffmpeg emits for layouts with no short name ("8 channels (FL+FR+...)").
+        if (targetAudioCodec === "libopus" && channels > 2) {
+          // layout -> the exact ffprobe channel_layout string(s) family 1 covers.
+          const family1Layouts = {
+            3: ["2.1"],
+            4: ["quad", "4.0"],
+            5: ["5.0"],
+            6: ["5.1", "5.1(side)"],
+            7: ["6.1"],
+            8: ["7.1", "7.1(wide)"],
+          };
+          const expected = family1Layouts[channels] || [];
+          // channelLayout arrives lowercased from the stream scan, but trim for
+          // safety; ffprobe emits the canonical spelling ("5.1(side)").
+          const normalized = layout.trim().toLowerCase();
+          const fitsFamily1 = expected.includes(normalized);
+
+          if (fitsFamily1) {
             perStream += " -mapping_family 1";
-            log += `☑ Audio stream ${i}: Using Opus mapping_family 1 for layout "${layout}" (${channels}ch).\n`;
+            log += `☑ Audio stream ${i}: Opus mapping_family 1 for "${layout}" (${channels}ch).\n`;
+          } else {
+            // Includes every height layout (7.1.4, 5.1.4, Atmos beds), any
+            // layout whose channel count family 1 has no slot for, and the long
+            // descriptive ffprobe strings that carry no short name.
+            perStream += " -mapping_family 255";
+            log += `☑ Audio stream ${i}: Opus mapping_family 255 (discrete) for "${layout}" (${channels}ch) — not a family 1 layout; discrete mapping keeps every channel instead of failing or downmixing.\n`;
           }
         }
 
