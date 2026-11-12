@@ -2,12 +2,12 @@
 
 const details = () => ({
   id: "Tdarr_Plugin_korewaChino_HEVC_Transcode_Optimize",
-  Name: "Transcode to HEVC or optimize existing HEVC files - Tiered based on resolution and bitrate (HW/SW)",
+  Name: "Transcode to HEVC/AV1 or optimize existing HEVC files - Tiered based on resolution and bitrate (HW/SW)",
   Type: "Video",
   Operation: "Transcode",
   Description:
-    "Transcode to HEVC (NVENC or CPU x265) based on resolution & bitrate; preserves non-video streams and can optimize existing HEVC.",
-  Version: "0.5.4",
+    "Transcode to HEVC (NVENC, CPU x265, VAAPI) or AV1 (CPU SVT-AV1) based on resolution & bitrate; preserves non-video streams and can optimize or re-encode existing HEVC.",
+  Version: "0.6.0",
   Link: "https://github.com/korewaChino/tdarr-plugins",
   Inputs: [
     {
@@ -29,7 +29,7 @@ const details = () => ({
         ],
       },
       tooltip:
-        "Choose the encoder speed/quality preset (passed to selected encoder).",
+        "Choose the encoder speed/quality preset (passed to the selected encoder). Ignored for cpu_av1, which uses av1_preset.",
     },
     {
       name: "video_encoder",
@@ -41,9 +41,51 @@ const details = () => ({
           "nvenc_hevc", // hevc_nvenc
           "cpu_x265", // libx265 fallback
           "vaapi_hevc", // hevc_vaapi
+          "cpu_av1", // libsvtav1
         ],
       },
-      tooltip: "Select HEVC encoder implementation (NVENC GPU or CPU x265).",
+      tooltip:
+        "Select encoder implementation: NVENC HEVC, CPU x265, VAAPI HEVC, or CPU AV1 (SVT-AV1).",
+    },
+    {
+      name: "av1_preset",
+      type: "string",
+      defaultValue: "8",
+      inputUI: {
+        type: "dropdown",
+        options: [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+        ],
+      },
+      tooltip:
+        "SVT-AV1 preset: 0 = slowest/best compression, 13 = fastest. Only used when video_encoder is cpu_av1. Preset 8 is a good speed/efficiency balance for 1080p.",
+    },
+    {
+      name: "av1_crf",
+      type: "string",
+      defaultValue: "40",
+      tooltip:
+        "SVT-AV1 CRF (1-63, lower = better quality). Only used when video_encoder is cpu_av1. Start at 40 for 1080p; use 38 for safer quality or 42 for smaller files.",
+    },
+    {
+      name: "force_reencode",
+      type: "boolean",
+      defaultValue: false,
+      tooltip:
+        "Transcode even when the source is already HEVC or AV1 and below the bitrate target. Required for a full-library AV1 conversion; leave off for normal optimize-in-place runs.",
     },
     {
       name: "hardware_decode_mode",
@@ -115,14 +157,14 @@ const details = () => ({
       type: "boolean",
       defaultValue: false,
       tooltip:
-        "If source pixel format uses higher chroma subsampling (4:4:4 or 4:2:2), attempt to preserve it instead of forcing 4:2:0. Conservative approach for NVENC (8-bit 4:4:4 only), full support for x265. May cause encoding failures on some systems. Ignored when force_8bit is enabled.",
+        "If source pixel format uses higher chroma subsampling (4:4:4 or 4:2:2), attempt to preserve it instead of forcing 4:2:0. Conservative approach for NVENC (8-bit 4:4:4 only), full support for x265. May cause encoding failures on some systems. Ignored when force_8bit is enabled and for cpu_av1, which always encodes 4:2:0.",
     },
     {
       name: "force_8bit",
       type: "boolean",
       defaultValue: true,
       tooltip:
-        "Force 8-bit output regardless of source bit depth. Recommended: standardizes output to 8-bit (yuv420p for x265/NVENC, nv12 for VAAPI) and avoids encoder failures on hardware that lacks 10-bit HEVC encoding support (e.g. VAProfileHEVCMain10 not available). Overrides preserve_chroma. Disable only if your hardware supports 10-bit HEVC encoding and you want to preserve bit depth.",
+        "Force 8-bit output regardless of source bit depth. Recommended: standardizes output to 8-bit (yuv420p for x265/AV1/NVENC, nv12 for VAAPI) and avoids encoder failures on hardware that lacks 10-bit HEVC encoding support (e.g. VAProfileHEVCMain10 not available). Overrides preserve_chroma. Disable only if your hardware supports 10-bit HEVC encoding and you want to preserve bit depth. For cpu_av1, disable this to keep 10-bit AV1 output (recommended).",
     },
     {
       name: "vaapi_align16",
@@ -150,7 +192,7 @@ const details = () => ({
       type: "boolean",
       defaultValue: false,
       tooltip:
-        "When enabled, the plugin will not reduce video bitrate below the original file's bitrate. Useful when transcoding from codecs like AV1 (which have different compression efficiency than HEVC) where bitrate reduction would cause quality loss. The original bitrate will be used as the target, with maxrate set to 1.5x.",
+        "When enabled, the plugin will not reduce video bitrate below the original file's bitrate. Useful when transcoding from codecs like AV1 (which have different compression efficiency than HEVC) where bitrate reduction would cause quality loss. The original bitrate will be used as the target, with maxrate set to 1.5x. Ignored for cpu_av1, which is CRF-only.",
     },
   ],
 });
@@ -173,6 +215,9 @@ function determineDecoder(file) {
     case "vp9":
       log += "☑File is already in vp9! \n";
       return { skip: true, presetPrefix: "", log };
+    case "av1":
+      log += "☑File is already in av1! \n";
+      return { skip: false, presetPrefix: "", log };
     default:
       log += "☑File is not in a supported codec, decoding with GPU/CPU! \n";
       return { skip: false, presetPrefix: "", log };
@@ -255,6 +300,13 @@ const ENCODER_PROFILES = Object.freeze({
     qualityFlag: "-qp",
     qualityValue: 26,
     baseFlags: "-rc_mode VBR",
+  },
+  cpu_av1: {
+    codec: "libsvtav1",
+    pix_fmt: "yuv420p10le",
+    supportsX265Params: false,
+    qualityFlag: "-crf",
+    qualityValue: 40,
   },
 });
 
@@ -536,6 +588,23 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   let vfFilter = ""; // optional video filter (e.g., fix odd dimensions)
   let videoBitstreamFlags = "";
   const transcode_preset = inputs.transcode_preset;
+  const av1PresetRaw = parseInt(
+    String(
+      inputs.av1_preset === undefined || inputs.av1_preset === null
+        ? "8"
+        : inputs.av1_preset,
+    ).trim(),
+    10,
+  );
+  const av1Preset = Number.isFinite(av1PresetRaw)
+    ? Math.min(13, Math.max(0, av1PresetRaw))
+    : 8;
+  const av1Crf = Math.min(
+    63,
+    Math.max(1, parsePositiveInt(inputs.av1_crf, 40)),
+  );
+  const forceReencode =
+    inputs.force_reencode === true || inputs.force_reencode === "true";
   const selectedEncoder = inputs.video_encoder || "nvenc_hevc";
   const hwDecodeMode = inputs.hardware_decode_mode || "auto";
   const nvencSafeMode =
@@ -632,6 +701,8 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       pix_fmt = "yuv420p";
     } else if (selectedEncoder === "cpu_x265") {
       pix_fmt = "yuv420p";
+    } else if (selectedEncoder === "cpu_av1") {
+      pix_fmt = "yuv420p";
     }
     response.infoLog += `☑ force_8bit: pix_fmt normalised to ${pix_fmt}.\n`;
   } else if (selectedEncoder === "vaapi_hevc") {
@@ -641,7 +712,13 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     pix_fmt = "nv12";
   }
 
-  if (!force8bit && preserveChroma && videoStream && videoStream.pix_fmt) {
+  if (
+    !force8bit &&
+    preserveChroma &&
+    selectedEncoder !== "cpu_av1" &&
+    videoStream &&
+    videoStream.pix_fmt
+  ) {
     try {
       const srcPix = (videoStream.pix_fmt || "").toLowerCase();
       // Detect subsampling markers
@@ -1005,9 +1082,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     const qualityVal =
       selectedEncoder === "vaapi_hevc"
         ? vaapiQp
-        : typeof resCfg.qualityOverride === "number"
-        ? resCfg.qualityOverride
-        : encoderConf.qualityValue;
+        : selectedEncoder === "cpu_av1"
+          ? av1Crf
+          : typeof resCfg.qualityOverride === "number"
+            ? resCfg.qualityOverride
+            : encoderConf.qualityValue;
     const qualitySegment = encoderConf.supportsX265Params
       ? ` ${encoderConf.qualityFlag} ${qualityVal}`
       : ` ${encoderConf.qualityFlag} ${qualityVal}`;
@@ -1016,7 +1095,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       : bitratemax;
     // If disable_bitrate_reduction is set, use original bitrate first (before VAAPI multiplier)
     let preserveOriginalBitrate = false;
-    if (disableBitrateReduction && bitrateprobe != null) {
+    if (
+      disableBitrateReduction &&
+      selectedEncoder !== "cpu_av1" &&
+      bitrateprobe != null
+    ) {
       const originalBitrateKbps = Math.round(bitrateprobe / 1000);
       bitratetarget = originalBitrateKbps;
       maxRateToUse = Math.round(originalBitrateKbps * 1.5);
@@ -1037,6 +1120,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     // preserve original bitrate to avoid quality loss
     if (
       !preserveOriginalBitrate &&
+      selectedEncoder !== "cpu_av1" &&
       firstStreamCodec === "hevc" &&
       bitrateprobe != null &&
       bitrateprobe < bitratecheck &&
@@ -1075,11 +1159,15 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       // When both CRF and -b:v are set, x265 ignores bitrate and uses CRF mode.
       const qualityOrBitrate = preserveOriginalBitrate
         ? ` -b:v:${vi} ${bitratetarget}k -maxrate:v:${vi} ${maxRateToUse}k`
-        : `${qualitySegment} -b:v:${vi} ${bitratetarget}k -maxrate:v:${vi} ${maxRateToUse}k`;
+        : selectedEncoder === "cpu_av1"
+          ? qualitySegment
+          : `${qualitySegment} -b:v:${vi} ${bitratetarget}k -maxrate:v:${vi} ${maxRateToUse}k`;
       videoEncodeFlags += ` -c:v:${vi} ${target_codec}${pixFmtFlag}${qualityOrBitrate}`;
     }
     // Apply preset once (global encoder preset is acceptable; ffmpeg will apply to all encoders)
-    videoEncodeFlags += ` -preset ${transcode_preset}${baseFlags}`;
+    const encoderPreset =
+      selectedEncoder === "cpu_av1" ? av1Preset : transcode_preset;
+    videoEncodeFlags += ` -preset ${encoderPreset}${baseFlags}`;
     // If we have attached pictures (cover art as video streams), copy them using -c:v copy
     // Note: These are video streams (codec_type=video with attached_pic=1), not attachment streams
     let attachedPicFlags = "";
@@ -1106,15 +1194,28 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   //if true the neccessary values will be changed
   if (transcode) {
     response.processFile = true;
+    if (selectedEncoder === "cpu_av1") {
+      response.infoLog += `☑ AV1 output: CRF ${av1Crf}, preset ${av1Preset}.\n`;
+    }
+    if (firstStreamCodec === "av1" && !forceReencode) {
+      response.infoLog += `File is already in AV1; skipping (enable force_reencode to override).\n`;
+      response.processFile = false;
+      response.infoLog += `☒File will not be transcoded!\n`;
+      return response;
+    }
     response.FFmpegMode = true;
     response.reQueueAfter = true;
     response.infoLog += `☒File is ${file.video_resolution}!\n`;
     response.infoLog += `☒File bitrate is ${bitrateprobe / 1000}kbps\n`;
-    response.infoLog += `☒Target Bitrate set to ${bitratecheck / 1000}kbps!\n`;
+    if (selectedEncoder === "cpu_av1") {
+      response.infoLog += `☒Bitrate threshold is ${bitratecheck / 1000}kbps (CRF mode ignores it).\n`;
+    } else {
+      response.infoLog += `☒Target Bitrate set to ${bitratecheck / 1000}kbps!\n`;
+    }
     if (bitrateprobe < bitratecheck) {
       response.infoLog += `File bitrate is LOWER than the Default Target Bitrate!\n`;
       // Check if HEVC already
-      if (firstStreamCodec === "hevc") {
+      if (!forceReencode && firstStreamCodec === "hevc") {
         // Transcode if we need format conversion (8-bit, audio, or pixel format)
         if (needs8bitConversion || needsFormatConversion) {
           // Already handled above - just log the reason
@@ -1138,7 +1239,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       response.infoLog += `File bitrate is HIGHER than the Default Target Bitrate!\n`;
     }
 
-    response.infoLog += `☒Target Bitrate set to ${bitratetarget}kbps!\n`;
+    if (selectedEncoder === "cpu_av1") {
+      response.infoLog += `☒AV1 CRF ${av1Crf} (preset ${av1Preset}); bitrate target not used.\n`;
+    } else {
+      response.infoLog += `☒Target Bitrate set to ${bitratetarget}kbps!\n`;
+    }
     response.infoLog += `File is being transcoded!\n`;
   }
 

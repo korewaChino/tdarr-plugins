@@ -17,11 +17,25 @@ All plugins are classic (v2) `Tdarr_Plugin_*` plugins, loaded as `Local` plugins
 from `Tdarr/Plugins/Local/` on the tdarr server.
 
 - **Cappy's HEVC Transcode/Optimization** (`Tdarr_Plugin_korewaChino_HEVC_Transcode_Optimize`)
-  — Transcodes to HEVC (NVENC, CPU x265, or VAAPI) based on resolution and
-  bitrate, and optimizes existing HEVC files to conform to its standards.
-  Preserves non-video streams and can transcode audio alongside. The encoder is
-  selected with the `video_encoder` input (`nvenc_hevc` / `cpu_x265` /
-  `vaapi_hevc`); a single plugin covers what used to be the separate CPU variant.
+  — Transcodes to HEVC (NVENC, CPU x265, or VAAPI) or AV1 (CPU SVT-AV1)
+  based on resolution and bitrate, and optimizes existing HEVC files to conform
+  to its standards. Preserves non-video streams and can transcode audio
+  alongside. The encoder is selected with the `video_encoder` input
+  (`nvenc_hevc` / `cpu_x265` / `vaapi_hevc` / `cpu_av1`); a single plugin covers
+  what used to be the separate CPU variant.
+
+### AV1 output (0.6.0)
+
+`video_encoder: cpu_av1` uses SVT-AV1 with `av1_preset` (0-13, default 8) and
+`av1_crf` (default 40). AV1 is CRF-only, so `-b:v`/`-maxrate` are omitted and
+`disable_bitrate_reduction` is ignored. Leave `force_8bit` off for 10-bit AV1
+(`yuv420p10le`); it defaults on for the HEVC encoders.
+
+`force_reencode` bypasses the existing HEVC/AV1 skip logic so a batch can
+re-encode sources that are already below the bitrate target. Without it, AV1
+sources are skipped and HEVC sources keep the old behaviour. Use
+`force_reencode: true` with `video_encoder: cpu_av1` for a full-library AV1
+conversion.
 
 > **Removed in 0.5.x:** the standalone `..._HEVC_Transcode_Optimize_CPU` and
 > `..._korewaChino_Standardize_Audio_Codecs` plugins. CPU encoding is now
